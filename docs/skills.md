@@ -19,6 +19,7 @@ Detailed guides for every gstack skill — philosophy, workflow, and examples.
 | [`/qa-only`](#qa) | **QA Reporter** | Same methodology as /qa but report only. Use when you want a pure bug report without code changes. |
 | [`/scrape`](#scrape) | **Browser Data Extractor** | Pull data from a web page. First call prototypes via `$B`; subsequent calls on a matching intent run a codified browser-skill in ~200ms. |
 | [`/skillify`](#skillify) | **Skill Codifier** | Walks back through your conversation, finds the last `/scrape` prototype, synthesizes script + test + fixture, runs the test, asks before committing. |
+| [`/event-creator`](#event-creator) | **Event Publisher** | Create Luma and connpass event drafts from rough event info, including timetable copy, screenshots, and publish safety gates. |
 | [`/ship`](#ship) | **Release Engineer** | Sync main, run tests, audit coverage, push, open PR. Bootstraps test frameworks if you don't have one. One command. |
 | [`/land-and-deploy`](#land-and-deploy) | **Release Engineer** | Merge the PR, wait for CI and deploy, verify production health. One command from "approved" to "verified in production." |
 | [`/canary`](#canary) | **SRE** | Post-deploy monitoring loop. Watches for console errors, performance regressions, and page failures using the browse daemon. |
@@ -889,6 +890,24 @@ The browser preserves all state (cookies, localStorage, tabs) across the handoff
 **Security note:** `/browse` runs a persistent Chromium session. Cookies, localStorage, and session state carry over between commands. Do not use it against sensitive production environments unless you intend to — it is a real browser with real state. The session auto-shuts down after 30 minutes of idle time.
 
 For the full command reference, see [BROWSER.md](../BROWSER.md).
+
+---
+
+## `/event-creator`
+
+This is the authenticated event-page creation workflow for Luma and connpass.
+
+It turns rough event information into a source brief, maps it into platform fields, and uses a logged-in browser session to fill event forms. Luma and connpass have different safety models: Luma creation can make an event live immediately, while connpass supports draft pages before publication.
+
+The skill keeps those paths separate:
+
+* Luma defaults toward Private or Unlisted visibility and stops before final creation unless you explicitly confirm.
+* connpass defaults to draft editing and stops before `即時公開する`.
+* Timetables are placed into the event description unless the live UI exposes a dedicated schedule feature.
+* Japanese-facing connpass copy uses natural headings such as `開催概要`, `タイムテーブル`, `参加方法`, and `注意事項`.
+* It records screenshots and returns a structured result with URLs, warnings, and remaining confirmation needs.
+
+Use it when you want one event mirrored to Luma and connpass, or when you want a Japanese event draft prepared without risking accidental publication.
 
 ---
 

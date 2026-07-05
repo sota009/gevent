@@ -38,6 +38,7 @@ Invoke them by name (e.g., `/office-hours`).
 | `/qa-only` | Same methodology as /qa but report only — no code changes. |
 | `/scrape` | Pull data from a web page. First call prototypes; codified call runs in ~200ms. |
 | `/skillify` | Codify the most recent successful `/scrape` flow into a permanent browser-skill. |
+| `/event-creator` | Create Luma and connpass event drafts from event details and a timetable using logged-in browser sessions. |
 
 ### Release + deploy
 
@@ -75,6 +76,7 @@ Invoke them by name (e.g., `/office-hours`).
 | `/open-gstack-browser` | Launch the visible GStack Browser with sidebar + stealth. |
 | `/setup-browser-cookies` | Import cookies from your real browser for authenticated testing. |
 | `/pair-agent` | Pair a remote AI agent (OpenClaw, Codex, etc.) with your browser. |
+| `/event-creator` | Fill Luma and connpass event pages with platform-specific safety gates, screenshots, and draft/publish confirmation. |
 
 ### iOS QA — drive real iPhones over USB or Tailscale (v1.43.0.0+)
 
