@@ -5,8 +5,13 @@ import { tmpdir } from 'node:os';
 
 const BIN = join(import.meta.dir, '..', 'bin', 'gstack-deck-publish');
 const createdDirs: string[] = [];
+const processes: Array<ReturnType<typeof Bun.spawn>> = [];
 
 afterEach(async () => {
+  for (const proc of processes.splice(0)) {
+    proc.kill();
+    await proc.exited.catch(() => {});
+  }
   for (const dir of createdDirs.splice(0)) {
     await rm(dir, { recursive: true, force: true });
   }
@@ -63,6 +68,83 @@ describe('gstack-deck-publish', () => {
     expect(result.stderr.toString()).toContain('slides are missing fields');
     expect(result.stderr.toString()).toContain('s1.speakerIntent');
   });
+
+  test('publishes caption updates through session state', async () => {
+    const dir = await makeDeckPackage();
+    const port = randomPort();
+    const proc = Bun.spawn([BIN, dir, '--port', String(port), '--tunnel', 'none'], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    processes.push(proc);
+    const base = `http://127.0.0.1:${port}`;
+    await waitForServer(`${base}/api/session`);
+
+    const response = await fetch(`${base}/api/session/caption`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        text: 'Agents should receive live captions.',
+        provider: 'manual',
+        sourceLanguage: 'en',
+        isFinal: true,
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const state = await response.json() as { caption: { text: string; provider: string; seq: number } };
+    expect(state.caption.text).toBe('Agents should receive live captions.');
+    expect(state.caption.provider).toBe('manual');
+    expect(state.caption.seq).toBe(1);
+
+    const session = await fetch(`${base}/api/session`).then(result => result.json()) as typeof state;
+    expect(session.caption.text).toBe('Agents should receive live captions.');
+  });
+
+  test('rejects oversized caption updates', async () => {
+    const dir = await makeDeckPackage();
+    const port = randomPort();
+    const proc = Bun.spawn([BIN, dir, '--port', String(port), '--tunnel', 'none'], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    processes.push(proc);
+    const base = `http://127.0.0.1:${port}`;
+    await waitForServer(`${base}/api/session`);
+
+    const response = await fetch(`${base}/api/session/caption`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: 'x'.repeat(700), provider: 'manual' }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toContain('Caption text must be');
+  });
+
+  test('reports Cactus and fallback caption providers', async () => {
+    const dir = await makeDeckPackage();
+    const port = randomPort();
+    const proc = Bun.spawn([BIN, dir, '--port', String(port), '--tunnel', 'none'], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    processes.push(proc);
+    const base = `http://127.0.0.1:${port}`;
+    await waitForServer(`${base}/api/session`);
+
+    const providers = await fetch(`${base}/api/caption/providers`).then(result => result.json()) as {
+      preferred: string;
+      cactus: { available: boolean; command: string };
+      browser: { available: boolean; command: string };
+      manual: { available: boolean };
+    };
+
+    expect(['cactus', 'browser']).toContain(providers.preferred);
+    expect(providers.cactus.command).toBe('cactus transcribe');
+    expect(providers.browser.available).toBe(true);
+    expect(providers.manual.available).toBe(true);
+  });
 });
 
 async function makeDeckPackage(deckOverrides: Record<string, unknown> = {}): Promise<string> {
@@ -112,4 +194,22 @@ async function makeDeckPackage(deckOverrides: Record<string, unknown> = {}): Pro
   await writeFile(join(dir, 'attendee.html'), '<!doctype html><title>attendee</title>');
   await writeFile(join(dir, 'speaker-notes.md'), '# Notes\n');
   return dir;
+}
+
+function randomPort(): number {
+  return 19_000 + Math.floor(Math.random() * 20_000);
+}
+
+async function waitForServer(url: string): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) return;
+    } catch {
+      // Server is still starting.
+    }
+    await Bun.sleep(50);
+  }
+  throw new Error(`Timed out waiting for ${url}`);
 }

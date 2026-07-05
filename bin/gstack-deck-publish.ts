@@ -13,6 +13,7 @@ type Options = {
 
 const REQUIRED_FILES = ['deck.json', 'speaker.html', 'attendee.html', 'speaker-notes.md'];
 const EVENT_ID = 'live-deck';
+const MAX_CAPTION_LENGTH = 600;
 
 main().catch(error => {
   console.error(error instanceof Error ? error.message : String(error));
@@ -178,6 +179,17 @@ type Preferences = {
   level: 'standard' | 'beginner' | 'expert';
 };
 
+type CaptionProvider = 'cactus' | 'browser' | 'manual';
+
+type CaptionState = {
+  text: string;
+  sourceLanguage: 'en' | 'ja';
+  provider: CaptionProvider;
+  isFinal: boolean;
+  seq: number;
+  updatedAt: string;
+};
+
 const defaultPreferences: Preferences = {
   language: 'en',
   fontScale: 1,
@@ -197,12 +209,48 @@ const presetPreferences: Record<string, Preferences> = {
 let liveDeck: Deck | undefined;
 let currentSlideId = '';
 const listeners = new Set<(data: unknown) => void>();
+let captionState: CaptionState = emptyCaptionState();
+let cactusProcess: ReturnType<typeof Bun.spawn> | undefined;
 
 async function handleApi(root: string, request: Request, url: URL): Promise<Response | undefined> {
   if (!url.pathname.startsWith('/api/')) return undefined;
   const deck = await getLiveDeck(root);
 
   if (url.pathname === '/api/session') {
+    return json(sessionState());
+  }
+
+  if (url.pathname === '/api/caption/providers') {
+    return json(captionProviders());
+  }
+
+  if (url.pathname === '/api/caption/cactus/start' && request.method === 'POST') {
+    return startCactusCaptions();
+  }
+
+  if (url.pathname === '/api/caption/cactus/stop' && request.method === 'POST') {
+    stopCactusCaptions();
+    return json(captionProviders());
+  }
+
+  if (url.pathname === '/api/session/caption' && request.method === 'POST') {
+    const body = await request.json().catch(() => ({})) as {
+      text?: string;
+      sourceLanguage?: 'en' | 'ja';
+      provider?: CaptionProvider;
+      isFinal?: boolean;
+    };
+    const text = sanitizeCaption(body.text ?? '');
+    if (!text) return json({ error: 'Caption text is required.' }, 400);
+    if ((body.text ?? '').length > MAX_CAPTION_LENGTH) {
+      return json({ error: `Caption text must be ${MAX_CAPTION_LENGTH} characters or fewer.` }, 400);
+    }
+    updateCaption({
+      text,
+      sourceLanguage: body.sourceLanguage === 'ja' ? 'ja' : 'en',
+      provider: body.provider === 'cactus' || body.provider === 'manual' ? body.provider : 'browser',
+      isFinal: body.isFinal !== false,
+    });
     return json(sessionState());
   }
 
@@ -254,12 +302,139 @@ async function getLiveDeck(root: string): Promise<Deck> {
   return liveDeck;
 }
 
-function sessionState(): Record<string, string> {
+function sessionState(): Record<string, unknown> {
   return {
     eventId: EVENT_ID,
     currentSlideId,
+    caption: captionState,
     updatedAt: new Date().toISOString(),
   };
+}
+
+function emptyCaptionState(): CaptionState {
+  return {
+    text: '',
+    sourceLanguage: 'en',
+    provider: 'manual',
+    isFinal: true,
+    seq: 0,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function captionProviders(): Record<string, unknown> {
+  const cactusAvailable = Boolean(Bun.which('cactus'));
+  return {
+    preferred: cactusAvailable ? 'cactus' : 'browser',
+    cactus: {
+      available: cactusAvailable,
+      running: Boolean(cactusProcess),
+      command: 'cactus transcribe',
+    },
+    browser: {
+      available: true,
+      command: 'SpeechRecognition',
+    },
+    manual: {
+      available: true,
+    },
+  };
+}
+
+function updateCaption(next: Omit<CaptionState, 'seq' | 'updatedAt'>): CaptionState {
+  captionState = {
+    ...next,
+    seq: captionState.seq + 1,
+    updatedAt: new Date().toISOString(),
+  };
+  const state = sessionState();
+  for (const listener of listeners) listener(state);
+  return captionState;
+}
+
+function sanitizeCaption(value: unknown): string {
+  return String(value ?? '')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_CAPTION_LENGTH);
+}
+
+function startCactusCaptions(): Response {
+  if (!Bun.which('cactus')) {
+    return json({ error: 'cactus is not installed or not on PATH.', ...captionProviders() }, 404);
+  }
+  if (cactusProcess) return json(captionProviders());
+
+  cactusProcess = Bun.spawn(['cactus', 'transcribe'], {
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+
+  void readCactusCaptionStream(cactusProcess.stdout);
+  void readCactusDiagnostics(cactusProcess.stderr);
+  void cactusProcess.exited.finally(() => {
+    cactusProcess = undefined;
+  });
+
+  return json(captionProviders());
+}
+
+function stopCactusCaptions(): void {
+  cactusProcess?.kill();
+  cactusProcess = undefined;
+}
+
+async function readCactusCaptionStream(stream: ReadableStream<Uint8Array> | null): Promise<void> {
+  if (!stream) return;
+  const decoder = new TextDecoder();
+  let pending = '';
+  for await (const chunk of stream) {
+    pending += decoder.decode(chunk, { stream: true });
+    const lines = pending.split(/\r?\n/);
+    pending = lines.pop() ?? '';
+    for (const line of lines) {
+      const text = extractCactusCaption(line);
+      if (text) {
+        updateCaption({
+          text,
+          sourceLanguage: 'en',
+          provider: 'cactus',
+          isFinal: true,
+        });
+      }
+    }
+  }
+}
+
+async function readCactusDiagnostics(stream: ReadableStream<Uint8Array> | null): Promise<void> {
+  if (!stream) return;
+  for await (const _chunk of stream) {
+    // Drain stderr so the Cactus subprocess cannot block on a full pipe.
+  }
+}
+
+function extractCactusCaption(line: string): string {
+  const trimmed = line.trim();
+  if (!trimmed) return '';
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    const candidates = [
+      parsed.text,
+      parsed.transcript,
+      parsed.caption,
+      parsed.response,
+      Array.isArray(parsed.segments)
+        ? parsed.segments.map(segment => typeof segment === 'object' && segment ? (segment as Record<string, unknown>).text : '').join(' ')
+        : '',
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && sanitizeCaption(candidate)) return sanitizeCaption(candidate);
+    }
+  } catch {
+    // Plain text CLI output is the common path.
+  }
+  return sanitizeCaption(trimmed.replace(/^(transcript|caption|text)\s*[:=-]\s*/i, ''));
 }
 
 function adjacentSlideId(deck: Deck, direction: 'next' | 'prev'): string {

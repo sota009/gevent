@@ -946,13 +946,26 @@ operator flow.
 - Keyboard navigation: next, previous, and reset.
 - Shows current slide, next slide title, speaker notes, and elapsed/remaining time.
 - Uses `deck.json` semantics; do not duplicate deck content by hand.
+- Includes live caption controls:
+  - A `Start captions` button that first attempts the local Cactus bridge exposed
+    by `gstack-deck-publish` (`/api/caption/cactus/start`).
+  - If Cactus is unavailable, falls back to browser `SpeechRecognition` /
+    `webkitSpeechRecognition`.
+  - Includes a manual caption input for rehearsal and emergency fallback.
+  - Posts caption updates to `/api/session/caption` with provider, source
+    language, final/interim state, and text.
 
 `attendee.html`:
 
 - Readable standalone HTML for attendees.
 - Keeps slide order and section hierarchy.
 - Includes takeaways and optional deeper notes from `adaptationHints`.
-- Marks the future personalization handoff point.
+- Lets participants choose language, text size, detail level, and contrast before
+  entering the live deck.
+- Shows a live caption rail below the current slide.
+- Uses Chrome's `Translator` API when available to translate speaker captions
+  into the attendee's selected language; if translation is unavailable, shows
+  the original caption and a clear status note.
 
 `speaker-notes.md`:
 
@@ -975,14 +988,28 @@ Behavior:
 - Validates the output folder contains `deck.json`, `speaker.html`,
   `speaker-notes.md`, and `attendee.html`.
 - Starts a local static server.
+- Exposes live deck APIs for slide sync, attendee rendering, caption provider
+  detection, Cactus caption start/stop, manual/browser caption publishing, and
+  SSE updates.
 - Uses `ngrok` if installed, otherwise `cloudflared` if installed, otherwise
   falls back to local-only URLs.
 - Prints `speaker`, `attendee`, and `deck` URLs.
 
 Use `--tunnel ngrok`, `--tunnel cloudflared`, or `--tunnel none` when the user
-has a preference. Prefer `ngrok` for live sync/SSE tests. `cloudflared` Quick
-Tunnel is fine for static HTML sharing, but Cloudflare documents that Quick
-Tunnels do not support SSE.
+has a preference. Prefer `ngrok` for live sync/SSE/caption tests. Cloudflare
+Quick Tunnel is fine for static HTML sharing, but Cloudflare documents that
+Quick Tunnels do not support SSE.
+
+Caption provider priority:
+
+1. Cactus local bridge (`cactus transcribe`) on the speaker machine.
+2. Browser speech recognition on the speaker page.
+3. Manual captions typed into `speaker.html`.
+
+Keep this provider order visible in the speaker UI. This makes the Cactus story
+honest and demo-safe: Cactus is the preferred path, but the presentation still
+works if Cactus is missing, downloading a model, or blocked by local audio
+permissions.
 
 Tell the user which URL to give participants:
 
@@ -1011,6 +1038,9 @@ by printing the speaker URL and attendee URL.
 - Attendee handoff: `attendee.html` is the default view.
 - Personalization handoff: pass `deck.json` plus attendee request to
   `/adaptive-attendee-deck`.
+- Caption handoff: `gstack-deck-publish` owns live caption transport; generated
+  HTML should only call the documented caption APIs, not invent another
+  transport.
 - Future tooling handoff: MCP/ChatGPT/Claude tools should consume `deck.json`
   and emit preferences or render instructions, not rewrite the source IR unless
   the speaker explicitly asks.
@@ -1020,6 +1050,9 @@ by printing the speaker URL and attendee URL.
 - `deck.json` validates as JSON.
 - Each slide has purpose, speaker intent, attendee takeaway, and notes.
 - `speaker.html` and `attendee.html` render without external services.
+- `speaker.html` can start Cactus-first captions, fall back to browser captions,
+  and publish manual captions.
+- `attendee.html` shows live captions and translation fallback status.
 - `speaker-notes.md` includes timing and handoff points.
 - The result can be personalized later without reading the speaker HTML.
 - If publish was requested, the user has a participant URL or a clear local-only

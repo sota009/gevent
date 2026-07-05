@@ -35,6 +35,10 @@
     .terms{display:grid;gap:8px}
     .term{padding:10px;border-radius:8px;background:rgba(57,217,138,.13)}
     .customizer{margin-top:12px;padding-top:12px;border-top:1px solid #d2d8d4}
+    .caption-rail{display:grid;gap:8px;margin-top:14px;padding:14px;border:1px solid #d2d8d4;border-radius:14px;background:#fff;color:#17201e}
+    .caption-label{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#52625f;font-size:12px;font-weight:850;text-transform:uppercase;letter-spacing:.08em}
+    .caption-text{margin:0;font-size:calc(18px * var(--font-scale,1));line-height:1.45;font-weight:760}
+    .caption-note{margin:0;color:#50605d;font-size:13px;line-height:1.4}
     .status-line{margin:10px 0 0;color:#50605d;font-size:14px;line-height:1.45}
     #agent-note{font-size:13px;color:#50605d}
     @media (max-width:430px){body{padding:0;place-items:stretch}.phone{width:100%;min-height:100vh;border-radius:0}.join-card,.deck-card{padding:20px}h1{font-size:38px}.slide-view{min-height:390px;padding:22px}}
@@ -67,6 +71,14 @@
         <span id="prefs"></span>
       </div>
       <article id="personalized-slide"></article>
+      <section class="caption-rail" aria-live="polite">
+        <div class="caption-label">
+          <span>Captions</span>
+          <span id="caption-meta">Waiting</span>
+        </div>
+        <p class="caption-text" id="caption-text">Captions appear here after the speaker starts.</p>
+        <p class="caption-note" id="caption-note">Cactus captions will appear first when available.</p>
+      </section>
       <p id="attendee-status" class="status-line">Waiting for the speaker.</p>
       <button type="button" id="customize">Customize my view</button>
       <section class="customizer hidden" id="customizer">
@@ -85,6 +97,8 @@
     let state={currentSlideId:''};
     let selectedPreset='standard';
     let joined=false;
+    let lastCaptionSeq=0;
+    let translator;
     const presetButtons=[...document.querySelectorAll('[data-preset]')];
     presetButtons.forEach(button=>button.addEventListener('click',()=>{
       selectedPreset=button.dataset.preset;
@@ -109,12 +123,53 @@
       document.querySelector('#personalized-slide').innerHTML='<div class="slide-view '+safeClassName(rendered.className)+'" style="'+safeStyle(rendered.style)+'"><p class="eyebrow">'+escapeHtml(rendered.slide.id)+'</p><h2>'+escapeHtml(rendered.title)+'</h2><p>'+escapeHtml(rendered.body)+'</p><div class="terms">'+rendered.terms.map(term=>'<div class="term"><strong>'+escapeHtml(term.label)+'</strong><br>'+escapeHtml(term.body)+'</div>').join('')+'</div><p class="takeaway">'+escapeHtml(rendered.takeaway)+'</p></div>';
     }
 
+    async function renderCaption(caption){
+      if(!caption||!caption.text||caption.seq===lastCaptionSeq)return;
+      lastCaptionSeq=caption.seq;
+      const targetLanguage=preferences.language||'en';
+      const sourceLanguage=caption.sourceLanguage||'en';
+      let text=caption.text;
+      let note=`${caption.provider||'speaker'} caption · ${caption.isFinal?'final':'live'}`;
+      if(targetLanguage!==sourceLanguage){
+        const translated=await translateCaption(text,sourceLanguage,targetLanguage);
+        if(translated){
+          text=translated;
+          note+=` · translated ${sourceLanguage} to ${targetLanguage}`;
+        }else{
+          note+=` · translation unavailable, showing ${sourceLanguage}`;
+        }
+      }
+      document.querySelector('#caption-text').textContent=text;
+      document.querySelector('#caption-meta').textContent=`#${caption.seq}`;
+      document.querySelector('#caption-note').textContent=note;
+    }
+
+    async function translateCaption(text,sourceLanguage,targetLanguage){
+      const Translator=window.Translator;
+      if(!Translator||!Translator.create)return '';
+      try{
+        if(!translator||translator.sourceLanguage!==sourceLanguage||translator.targetLanguage!==targetLanguage){
+          const availability=Translator.availability
+            ? await Translator.availability({sourceLanguage,targetLanguage})
+            : 'available';
+          if(availability==='unavailable')return '';
+          translator=await Translator.create({sourceLanguage,targetLanguage});
+          translator.sourceLanguage=sourceLanguage;
+          translator.targetLanguage=targetLanguage;
+        }
+        return await translator.translate(text);
+      }catch{
+        return '';
+      }
+    }
+
     async function refreshSession(){
       const next=await fetch('/api/session',{cache:'no-store'}).then(response=>response.json());
       if(next.currentSlideId!==state.currentSlideId){
         state=next;
         if(joined) await render();
       }
+      if(joined) await renderCaption(next.caption);
     }
 
     document.querySelector('#start').addEventListener('click',async()=>{
@@ -124,11 +179,21 @@
       document.querySelector('#join').classList.add('hidden');
       document.querySelector('#deck').classList.remove('hidden');
       await render();
+      await renderCaption(state.caption);
     });
     document.querySelector('#customize').addEventListener('click',()=>document.querySelector('#customizer').classList.toggle('hidden'));
     document.querySelector('#apply').addEventListener('click',()=>adapt(document.querySelector('#custom-request').value,selectedPreset));
 
-    setInterval(refreshSession,1000);
+    const events=new EventSource('/api/events');
+    events.onmessage=event=>{
+      const next=JSON.parse(event.data);
+      const slideChanged=next.currentSlideId!==state.currentSlideId;
+      state=next;
+      if(joined&&slideChanged)render();
+      if(joined)renderCaption(next.caption);
+    };
+    events.onerror=()=>refreshSession();
+    setInterval(refreshSession,300);
     refreshSession();
   </script>
 </body>
