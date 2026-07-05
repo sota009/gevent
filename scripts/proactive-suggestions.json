@@ -265,7 +265,7 @@
     },
     "speaker-deck-builder": {
       "lead": "Build an Adaptive Live Deck source package from scripts, Markdown, notes, title, audience, and duration.",
-      "routing": "Produces deck.json, speaker.html,\nspeaker-notes.md, and attendee.html by first creating a semantic slide IR.\nOptimized for a minimal 3-hour hackathon flow, not a full presentation suite.\nUse when asked to \"make a live deck\", \"build speaker slides\", \"turn these\nnotes into an adaptive deck\", or \"prepare an attendee deck\".",
+      "routing": "Produces deck.json, speaker.html,\nspeaker-notes.md, and attendee.html by first creating a semantic slide IR.\nCan also publish the generated HTML through a local static server and an\navailable tunnel using bin/gstack-deck-publish.\nOptimized for a minimal 3-hour hackathon flow, not a full presentation suite.\nUse when asked to \"make a live deck\", \"build speaker slides\", \"turn these\nnotes into an adaptive deck\", or \"prepare an attendee deck\".",
       "voice_line": null
     },
     "spec": {

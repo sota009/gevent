@@ -25,6 +25,8 @@ triggers:
 
 Produces deck.json, speaker.html,
 speaker-notes.md, and attendee.html by first creating a semantic slide IR.
+Can also publish the generated HTML through a local static server and an
+available tunnel using bin/gstack-deck-publish.
 Optimized for a minimal 3-hour hackathon flow, not a full presentation suite.
 Use when asked to "make a live deck", "build speaker slides", "turn these
 notes into an adaptive deck", or "prepare an attendee deck".
@@ -794,6 +796,25 @@ The MVP is a hackathon path: useful in about 3 hours, easy to inspect, and easy
 to hand to `/adaptive-attendee-deck`. Prefer a boring static output over a broad
 deck platform.
 
+If the user asks to publish, share, test with participants, or make a public URL,
+use `bin/gstack-deck-publish` after artifacts are generated.
+
+## Operator Response Mode
+
+When the user asks to publish or share the deck, respond in English from this
+point forward unless the user explicitly asks for another language. Write as if
+this is normal production operation, not a staged presentation. Avoid any
+wording that frames the run as synthetic, theatrical, or made only for a panel.
+
+Keep the response short and operational:
+
+1. Confirm the source file was received.
+2. State the derived output directory.
+3. State that the deck package is being built and published.
+4. Finish with `Speaker URL`, `Participant URL`, and `Deck JSON URL`.
+
+Do not ask for `Output:` in the normal flow.
+
 ## Inputs
 
 Accept any combination of:
@@ -809,6 +830,20 @@ If required inputs are missing, ask only for the smallest unblocker:
 1. Topic/title.
 2. Audience.
 3. Target duration.
+
+`Output:` is optional. Do not ask for it just to proceed. If the user provides a
+source file but no output directory, derive one automatically next to the source:
+
+- Strip the extension from the source filename.
+- Strip a trailing `-input`, `_input`, `-notes`, or `_notes` when present.
+- Append `-deck`.
+
+Example: `adaptive-live-deck/examples/speaker-deck-builder-input.md`
+defaults to `adaptive-live-deck/examples/speaker-deck-builder-deck`.
+
+If the user provides pasted material and no output directory, create
+`./adaptive-live-deck-output/<slug>-deck` when the repo has an
+`adaptive-live-deck/` directory, otherwise create `./<slug>-deck`.
 
 ## User Journey
 
@@ -827,7 +862,7 @@ Read the supplied files or pasted content. Extract:
 - Core promise: one sentence the audience should remember.
 - Audience model: role, prior knowledge, desired outcome, likely objections.
 - Timing budget: total minutes, per-section rough allocation, Q&A.
-- Content inventory: stories, claims, examples, demos, diagrams, citations.
+- Content inventory: stories, claims, examples, walkthroughs, diagrams, citations.
 
 Do not preserve source order blindly. Reorder into a coherent talk arc when it
 helps the audience.
@@ -902,7 +937,9 @@ and runtime personalization. Document any deferment in `speaker-notes.md` under
 
 ## Step 4 — Render Artifacts
 
-Create all four artifacts in the user's requested or current working directory.
+Create all four artifacts in the user's requested or automatically derived
+output directory. The user should not need to provide `Output:` for the normal
+operator flow.
 
 `speaker.html`:
 
@@ -924,6 +961,48 @@ Create all four artifacts in the user's requested or current working directory.
 - Places to pause, ask questions, or branch.
 - Handoff instructions for `/adaptive-attendee-deck`.
 
+## Step 5 — Publish For Participant Testing
+
+If the user asked to publish automatically, share with participants, or requested
+a public URL, run this after all four artifacts exist and `deck.json` validates:
+
+```bash
+$GSTACK_BIN/gstack-deck-publish <output-dir>
+```
+
+Behavior:
+
+- Validates the output folder contains `deck.json`, `speaker.html`,
+  `speaker-notes.md`, and `attendee.html`.
+- Starts a local static server.
+- Uses `ngrok` if installed, otherwise `cloudflared` if installed, otherwise
+  falls back to local-only URLs.
+- Prints `speaker`, `attendee`, and `deck` URLs.
+
+Use `--tunnel ngrok`, `--tunnel cloudflared`, or `--tunnel none` when the user
+has a preference. Prefer `ngrok` for live sync/SSE tests. `cloudflared` Quick
+Tunnel is fine for static HTML sharing, but Cloudflare documents that Quick
+Tunnels do not support SSE.
+
+Tell the user which URL to give participants:
+
+- Speaker opens `PUBLIC/speaker.html`.
+- Participants open `PUBLIC/attendee.html`.
+- Future `/adaptive-attendee-deck` handoff uses `PUBLIC/deck.json`.
+
+For the common command shape, `Output:` is not required:
+
+```text
+/speaker-deck-builder
+
+この入力からデッキを作って。生成後、自動で公開URLも出して。
+Source:
+adaptive-live-deck/examples/speaker-deck-builder-input.md
+```
+
+In that case, generate into the derived output directory, publish it, and finish
+by printing the speaker URL and attendee URL.
+
 ## Handoff Points
 
 - Speaker review: after `deck.json` and before rendering, ask the user to check
@@ -943,6 +1022,8 @@ Create all four artifacts in the user's requested or current working directory.
 - `speaker.html` and `attendee.html` render without external services.
 - `speaker-notes.md` includes timing and handoff points.
 - The result can be personalized later without reading the speaker HTML.
+- If publish was requested, the user has a participant URL or a clear local-only
+  fallback when no tunnel binary exists.
 
 ## Capture Learnings
 

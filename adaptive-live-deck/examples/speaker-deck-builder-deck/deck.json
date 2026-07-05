@@ -1,0 +1,260 @@
+{
+  "version": "0.1",
+  "title": "The Web Needs an Agent Entrance",
+  "audience": {
+    "role": "Product-minded engineers and early-stage founders",
+    "priorKnowledge": "Uses AI coding tools and understands APIs, forms, web apps, and basic security tradeoffs. New to Agent Cards, structured handoff, encrypted intake, and adaptive attendee decks.",
+    "desiredOutcome": "Can explain why services need an agent-native entrance next to the human UI, and can inspect deck.json as the source of truth."
+  },
+  "durationMinutes": 20,
+  "qaAllocation": "Q&A happens after the talk.",
+  "corePromise": "Every serious service will need an agent-native entrance beside the human UI, and semantic live decks make that shift explainable without becoming a full presentation platform.",
+  "sections": [
+    {
+      "id": "opening",
+      "purpose": "earn-attention",
+      "timeMinutes": 2,
+      "slides": ["s01"]
+    },
+    {
+      "id": "problem",
+      "purpose": "show-current-breakage",
+      "timeMinutes": 4,
+      "slides": ["s02", "s03"]
+    },
+    {
+      "id": "thesis",
+      "purpose": "name-the-product-shape",
+      "timeMinutes": 5,
+      "slides": ["s04", "s05"]
+    },
+    {
+      "id": "walkthrough",
+      "purpose": "make-the-abstract-visible",
+      "timeMinutes": 5,
+      "slides": ["s06", "s07"]
+    },
+    {
+      "id": "trust",
+      "purpose": "answer-the-risk-question",
+      "timeMinutes": 2,
+      "slides": ["s08"]
+    },
+    {
+      "id": "close",
+      "purpose": "leave-one-sentence-and-next-action",
+      "timeMinutes": 2,
+      "slides": ["s09"]
+    }
+  ],
+  "slides": [
+    {
+      "id": "s01",
+      "type": "story",
+      "title": "The user already told their agent",
+      "purpose": "open-with-a-familiar-failure",
+      "speakerIntent": "Make the audience feel the waste in asking a user to retype data their agent already prepared.",
+      "attendeeTakeaway": "The human web flow becomes incomplete when a personal agent is doing the preparation.",
+      "timeMinutes": 2,
+      "content": {
+        "headline": "The form still asks the human to start over.",
+        "bullets": [
+          "The user gave their agent the goal and context.",
+          "The service only exposes labels and fields for a browser user.",
+          "The final mile becomes copy-paste instead of handoff."
+        ]
+      },
+      "notes": "Start concrete. Do not mention protocols yet. Use the image of a user watching their agent prepare everything, then being asked to type it again.",
+      "adaptationHints": {
+        "canShorten": true,
+        "deepDiveTags": ["user-story", "workflow-friction"],
+        "alternateFrames": ["accessibility", "enterprise-ops"]
+      }
+    },
+    {
+      "id": "s02",
+      "type": "problem",
+      "title": "Human UI is not a protocol",
+      "purpose": "separate-visual-interfaces-from-reliable-handoff",
+      "speakerIntent": "Show why browser automation is useful but fragile when it becomes the only agent path.",
+      "attendeeTakeaway": "Scraping a human interface is brittle, hidden, and hard to audit.",
+      "timeMinutes": 2,
+      "content": {
+        "headline": "Agents need more than pixels and labels.",
+        "bullets": [
+          "Layout changes break task automation.",
+          "Hidden assumptions are hard for users to inspect.",
+          "Manual fallback turns the agent into a clipboard."
+        ]
+      },
+      "notes": "Keep this balanced. Browser agents are useful. The claim is that services should expose a cleaner path when the task matters.",
+      "adaptationHints": {
+        "canShorten": false,
+        "deepDiveTags": ["browser-agents", "reliability", "auditability"]
+      }
+    },
+    {
+      "id": "s03",
+      "type": "contrast",
+      "title": "Two bad choices",
+      "purpose": "make-the-current-tradeoff-memorable",
+      "speakerIntent": "Give the audience a simple mental model for the broken default.",
+      "attendeeTakeaway": "Scrape the form or make the user copy-paste are both weak defaults.",
+      "timeMinutes": 2,
+      "content": {
+        "headline": "Scrape the page, or make the user do the work.",
+        "columns": [
+          {
+            "label": "Scrape",
+            "items": ["Fast when it works", "Breaks silently", "Hard to verify"]
+          },
+          {
+            "label": "Copy-paste",
+            "items": ["Visible to the user", "Slow and repetitive", "Loses agent value"]
+          }
+        ]
+      },
+      "notes": "This is the first punchline. Let the contrast breathe before introducing the additive shape.",
+      "adaptationHints": {
+        "canShorten": true,
+        "deepDiveTags": ["product-framing", "workflow-design"]
+      }
+    },
+    {
+      "id": "s04",
+      "type": "thesis",
+      "title": "Keep the human UI. Add an agent entrance.",
+      "purpose": "state-the-main-thesis",
+      "speakerIntent": "Make the product shape feel additive, not anti-human.",
+      "attendeeTakeaway": "The answer is a service-owned agent path beside the human interface.",
+      "timeMinutes": 2.5,
+      "content": {
+        "headline": "The next web has two doors.",
+        "bullets": [
+          "Humans still inspect, override, and complete tasks directly.",
+          "Agents get a discoverable path for structured handoff.",
+          "The service owns the contract instead of hoping layout automation works."
+        ]
+      },
+      "notes": "Say this sentence slowly. This is the line the audience should remember after the talk.",
+      "adaptationHints": {
+        "canShorten": false,
+        "deepDiveTags": ["thesis", "positioning", "agent-native-services"]
+      }
+    },
+    {
+      "id": "s05",
+      "type": "architecture",
+      "title": "Minimum useful agent entrance",
+      "purpose": "turn-the-thesis-into-parts",
+      "speakerIntent": "Show the smallest system that is useful without sounding like a giant platform.",
+      "attendeeTakeaway": "Discovery, schema, consent, verification, and fallback are the core pieces.",
+      "timeMinutes": 2.5,
+      "content": {
+        "headline": "Boring is the feature.",
+        "bullets": [
+          "A discoverable card tells agents what the service accepts.",
+          "A structured intake request carries schema and consent.",
+          "A secure submission path lets the service verify the handoff.",
+          "A human-readable fallback keeps the user in control."
+        ]
+      },
+      "notes": "Use this slide to lower the temperature. The MVP is not replacing websites. It is making a narrow handoff reliable.",
+      "adaptationHints": {
+        "canShorten": false,
+        "deepDiveTags": ["architecture", "security", "mvp"]
+      }
+    },
+    {
+      "id": "s06",
+      "type": "walkthrough",
+      "title": "The deck follows the same rule",
+      "purpose": "connect-the-product-thesis-to-the-live-deck-package",
+      "speakerIntent": "Explain why this deck is semantic before showing files.",
+      "attendeeTakeaway": "Do not trap meaning in rendered output when another agent needs to adapt it later.",
+      "timeMinutes": 2,
+      "content": {
+        "headline": "Pixels are the presentation, not the source of truth.",
+        "bullets": [
+          "The speaker view is one rendering.",
+          "The attendee view is another rendering.",
+          "Personalized views should consume semantic slide data."
+        ]
+      },
+      "notes": "Bridge from web services to decks. The analogy is the point: structured handoff beats reverse engineering.",
+      "adaptationHints": {
+        "canShorten": true,
+        "deepDiveTags": ["adaptive-live-deck", "semantic-ir", "personalization"]
+      }
+    },
+    {
+      "id": "s07",
+      "type": "walkthrough",
+      "title": "Four artifacts, one source",
+      "purpose": "make-the-output-inspectable",
+      "speakerIntent": "Give the audience concrete files to look for in the published package.",
+      "attendeeTakeaway": "deck.json is the durable source. HTML files are renderings.",
+      "timeMinutes": 3,
+      "content": {
+        "headline": "Inspect deck.json first.",
+        "bullets": [
+          "deck.json: semantic slide IR and source of truth.",
+          "speaker.html: delivery view with notes, timing, and navigation.",
+          "speaker-notes.md: script, timing, branches, and handoff cues.",
+          "attendee.html: standalone reader view for people after the talk."
+        ]
+      },
+      "notes": "Open the generated folder here. Point at purpose, speakerIntent, attendeeTakeaway, and adaptationHints in deck.json.",
+      "adaptationHints": {
+        "canShorten": false,
+        "deepDiveTags": ["files", "walkthrough", "handoff"]
+      }
+    },
+    {
+      "id": "s08",
+      "type": "trust",
+      "title": "The trust model is scoped handoff",
+      "purpose": "answer-the-obvious-security-objection",
+      "speakerIntent": "Prevent the audience from hearing this as 'let agents do anything'.",
+      "attendeeTakeaway": "The safe version is scoped discovery, explicit consent, structured payloads, verification, and fallback.",
+      "timeMinutes": 2,
+      "content": {
+        "headline": "Not unlimited agent power. Clear boundaries.",
+        "bullets": [
+          "Discovery says what is possible.",
+          "Consent says what the user allowed.",
+          "Structured payloads say what was sent.",
+          "Service-side verification says what was accepted."
+        ]
+      },
+      "notes": "This is the risk slide. Keep it precise. Do not overclaim security properties that are not in the current package.",
+      "adaptationHints": {
+        "canShorten": false,
+        "deepDiveTags": ["security", "consent", "verification"]
+      }
+    },
+    {
+      "id": "s09",
+      "type": "close",
+      "title": "The next web has an entrance for agents",
+      "purpose": "leave-the-room-with-one-sentence",
+      "speakerIntent": "End with the thesis and a concrete next inspection step.",
+      "attendeeTakeaway": "Keep the human UI, but give agents a service-owned entrance with structured handoff and consent.",
+      "timeMinutes": 2,
+      "content": {
+        "headline": "Keep the human UI. Give agents a clean entrance.",
+        "bullets": [
+          "The user stays in control.",
+          "The service owns the contract.",
+          "The agent gets a path that does not depend on guessing the page."
+        ],
+        "nextAction": "Inspect deck.json."
+      },
+      "notes": "Repeat the exact one-sentence takeaway. Then point the audience to deck.json as the artifact that makes later personalization possible.",
+      "adaptationHints": {
+        "canShorten": true,
+        "deepDiveTags": ["closing", "next-action"]
+      }
+    }
+  ]
+}

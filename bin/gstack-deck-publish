@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+
+BUN_CMD="${BUN_CMD:-}"
+if [ -z "$BUN_CMD" ]; then
+  if command -v bun >/dev/null 2>&1; then
+    BUN_CMD="$(command -v bun)"
+  elif [ -x "$HOME/.bun/bin/bun" ]; then
+    BUN_CMD="$HOME/.bun/bin/bun"
+  else
+    echo "gstack-deck-publish requires Bun. Install Bun or set BUN_CMD=/path/to/bun." >&2
+    exit 127
+  fi
+fi
+
+exec "$BUN_CMD" "$ROOT/bin/gstack-deck-publish.ts" "$@"

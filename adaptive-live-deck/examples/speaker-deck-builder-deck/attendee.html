@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Participant | The Web Needs an Agent Entrance</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:linear-gradient(135deg,#10201c,#23302b 58%,#493f2a);color:#17201e;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:0}
+    button,textarea{font:inherit}
+    button{border:0;border-radius:8px;background:#39d98a;color:#09110d;font-weight:850;cursor:pointer}
+    button:hover{filter:brightness(1.07)}
+    button:focus-visible,textarea:focus-visible{outline:3px solid #f8c86b;outline-offset:3px}
+    .phone{width:min(440px,100%);min-height:min(780px,calc(100vh - 48px));overflow:auto;border:1px solid rgba(255,255,255,.14);border-radius:28px;background:#f7f2e8;box-shadow:0 30px 90px rgba(0,0,0,.35)}
+    .join-card,.deck-card{padding:24px}
+    .eyebrow{margin:0 0 12px;color:#237f63;text-transform:uppercase;font-size:12px;font-weight:850;letter-spacing:.12em}
+    h1{margin:0 0 22px;font-family:Georgia,serif;font-size:44px;line-height:1}
+    .intro{margin:0 0 20px;color:#52625f;font-size:16px;line-height:1.45}
+    .preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+    .preset-grid button{min-height:50px;padding:12px;background:#17201e;color:#f7f2e8}
+    .preset-grid button.active{background:#39d98a;color:#09110d}
+    label{display:grid;gap:8px;font-weight:850;color:#31413e}
+    textarea{min-height:96px;resize:vertical;border:1px solid #c9d1ca;border-radius:8px;padding:12px;background:#fff;color:#17201e}
+    #start,#apply,#customize{width:100%;min-height:50px;margin-top:14px;padding:14px}
+    .hidden{display:none!important}
+    .live-row{display:flex;align-items:center;gap:8px;margin-bottom:18px;color:#52625f;font-size:12px;font-weight:850}
+    .live-dot{width:9px;height:9px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 6px rgba(22,163,74,.12)}
+    #prefs{margin-left:auto;color:#1b7b58;text-align:right}
+    .slide-view{min-height:430px;display:flex;flex-direction:column;gap:18px;border-radius:18px;padding:28px;background:#fff;color:#17201e;font-size:calc(18px * var(--font-scale,1))}
+    .slide-view.theme-high{background:#050807;color:#fff;border:3px solid #39d98a}
+    .slide-view h2{margin:0;font-family:Georgia,serif;font-size:calc(34px * var(--font-scale,1));line-height:1.05}
+    .slide-view p{margin:0;line-height:1.45}
+    .takeaway{margin-top:auto;padding-top:18px;border-top:1px solid rgba(0,0,0,.15);font-weight:900}
+    .theme-high .takeaway{border-color:rgba(255,255,255,.3)}
+    .terms{display:grid;gap:8px}
+    .term{padding:10px;border-radius:8px;background:rgba(57,217,138,.13)}
+    .customizer{margin-top:12px;padding-top:12px;border-top:1px solid #d2d8d4}
+    .status-line{margin:10px 0 0;color:#50605d;font-size:14px;line-height:1.45}
+    #agent-note{font-size:13px;color:#50605d}
+    @media (max-width:430px){body{padding:0;place-items:stretch}.phone{width:100%;min-height:100vh;border-radius:0}.join-card,.deck-card{padding:20px}h1{font-size:38px}.slide-view{min-height:390px;padding:22px}}
+  </style>
+</head>
+<body>
+  <main class="phone">
+    <section class="join-card" id="join">
+      <p class="eyebrow">Participant View</p>
+      <h1>Make this talk fit me</h1>
+      <p class="intro">Choose a starting view, or describe what you need before joining the live slide.</p>
+      <div class="preset-grid">
+        <button type="button" data-preset="standard">Standard</button>
+        <button type="button" data-preset="jaLarge">日本語 + Large</button>
+        <button type="button" data-preset="beginner">Beginner</button>
+        <button type="button" data-preset="highContrast">High Contrast</button>
+        <button type="button" data-preset="expert">Expert Notes</button>
+      </div>
+      <label>
+        Personal request
+        <textarea id="initial-request" placeholder="例: 日本語で、もっと大きく、初心者向けにして"></textarea>
+      </label>
+      <button type="button" id="start">Start live view</button>
+    </section>
+
+    <section class="deck-card hidden" id="deck">
+      <div class="live-row">
+        <span class="live-dot"></span>
+        <span>Live with speaker</span>
+        <span id="prefs"></span>
+      </div>
+      <article id="personalized-slide"></article>
+      <p id="attendee-status" class="status-line">Waiting for the speaker.</p>
+      <button type="button" id="customize">Customize my view</button>
+      <section class="customizer hidden" id="customizer">
+        <label>
+          Personal request
+          <textarea id="custom-request" placeholder="もっと文字を大きく、専門用語の説明を増やして"></textarea>
+        </label>
+        <button type="button" id="apply">Apply to my view</button>
+        <p id="agent-note"></p>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    let preferences={language:'en',fontScale:1,detail:'normal',contrast:'default',level:'standard'};
+    let state={currentSlideId:''};
+    let selectedPreset='standard';
+    let joined=false;
+    const presetButtons=[...document.querySelectorAll('[data-preset]')];
+    presetButtons.forEach(button=>button.addEventListener('click',()=>{
+      selectedPreset=button.dataset.preset;
+      presetButtons.forEach(item=>item.classList.toggle('active',item===button));
+    }));
+    presetButtons[0].classList.add('active');
+
+    function escapeHtml(value){return String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))}
+    function safeClassName(value){return String(value).split(/\s+/).filter(part=>/^[a-z0-9_-]+$/i.test(part)).join(' ')}
+    function safeStyle(value){return /^--font-scale:[0-9.]+$/.test(String(value))?String(value):'--font-scale:1'}
+
+    async function adapt(requestText,preset){
+      preferences=await fetch('/api/adapt',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({requestText,preset,currentPreferences:preferences})}).then(response=>response.json());
+      document.querySelector('#agent-note').textContent=preferences.explanation||'Updated.';
+      if(joined) await render();
+    }
+
+    async function render(){
+      const rendered=await fetch('/api/render',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({slideId:state.currentSlideId,preferences})}).then(response=>response.json());
+      document.querySelector('#prefs').textContent=[preferences.language,Math.round(preferences.fontScale*100)+'%',preferences.level,preferences.contrast].join(' / ');
+      document.querySelector('#attendee-status').textContent='Synced to '+rendered.slide.id+' · '+rendered.slide.title;
+      document.querySelector('#personalized-slide').innerHTML='<div class="slide-view '+safeClassName(rendered.className)+'" style="'+safeStyle(rendered.style)+'"><p class="eyebrow">'+escapeHtml(rendered.slide.id)+'</p><h2>'+escapeHtml(rendered.title)+'</h2><p>'+escapeHtml(rendered.body)+'</p><div class="terms">'+rendered.terms.map(term=>'<div class="term"><strong>'+escapeHtml(term.label)+'</strong><br>'+escapeHtml(term.body)+'</div>').join('')+'</div><p class="takeaway">'+escapeHtml(rendered.takeaway)+'</p></div>';
+    }
+
+    async function refreshSession(){
+      const next=await fetch('/api/session',{cache:'no-store'}).then(response=>response.json());
+      if(next.currentSlideId!==state.currentSlideId){
+        state=next;
+        if(joined) await render();
+      }
+    }
+
+    document.querySelector('#start').addEventListener('click',async()=>{
+      await refreshSession();
+      await adapt(document.querySelector('#initial-request').value,selectedPreset);
+      joined=true;
+      document.querySelector('#join').classList.add('hidden');
+      document.querySelector('#deck').classList.remove('hidden');
+      await render();
+    });
+    document.querySelector('#customize').addEventListener('click',()=>document.querySelector('#customizer').classList.toggle('hidden'));
+    document.querySelector('#apply').addEventListener('click',()=>adapt(document.querySelector('#custom-request').value,selectedPreset));
+
+    setInterval(refreshSession,1000);
+    refreshSession();
+  </script>
+</body>
+</html>
