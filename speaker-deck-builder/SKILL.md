@@ -966,6 +966,9 @@ operator flow.
 - Uses Chrome's `Translator` API when available to translate speaker captions
   into the attendee's selected language; if translation is unavailable, shows
   the original caption and a clear status note.
+- Because Chrome documents the Translator API as desktop-only, mobile attendee
+  views must fall back to `/api/translate` when the selected language differs
+  from the caption source language.
 
 `speaker-notes.md`:
 
@@ -991,6 +994,8 @@ Behavior:
 - Exposes live deck APIs for slide sync, attendee rendering, caption provider
   detection, Cactus caption start/stop, manual/browser caption publishing, and
   SSE updates.
+- Exposes `/api/translate` so real mobile attendee devices can receive translated
+  captions even when the browser-side Translator API is unavailable.
 - Uses `ngrok` if installed, otherwise `cloudflared` if installed, otherwise
   falls back to local-only URLs.
 - Prints `speaker`, `attendee`, and `deck` URLs.

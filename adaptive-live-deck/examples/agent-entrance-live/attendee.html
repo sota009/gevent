@@ -132,9 +132,9 @@
       let note=`${caption.provider||'speaker'} caption · ${caption.isFinal?'final':'live'}`;
       if(targetLanguage!==sourceLanguage){
         const translated=await translateCaption(text,sourceLanguage,targetLanguage);
-        if(translated){
-          text=translated;
-          note+=` · translated ${sourceLanguage} to ${targetLanguage}`;
+        if(translated&&translated.text){
+          text=translated.text;
+          note+=` · translated ${sourceLanguage} to ${targetLanguage} via ${translated.provider}`;
         }else{
           note+=` · translation unavailable, showing ${sourceLanguage}`;
         }
@@ -146,20 +146,36 @@
 
     async function translateCaption(text,sourceLanguage,targetLanguage){
       const Translator=window.Translator;
-      if(!Translator||!Translator.create)return '';
-      try{
-        if(!translator||translator.sourceLanguage!==sourceLanguage||translator.targetLanguage!==targetLanguage){
-          const availability=Translator.availability
-            ? await Translator.availability({sourceLanguage,targetLanguage})
-            : 'available';
-          if(availability==='unavailable')return '';
-          translator=await Translator.create({sourceLanguage,targetLanguage});
-          translator.sourceLanguage=sourceLanguage;
-          translator.targetLanguage=targetLanguage;
+      if(Translator&&Translator.create){
+        try{
+          if(!translator||translator.sourceLanguage!==sourceLanguage||translator.targetLanguage!==targetLanguage){
+            const availability=Translator.availability
+              ? await Translator.availability({sourceLanguage,targetLanguage})
+              : 'available';
+            if(availability!=='unavailable'){
+              translator=await Translator.create({sourceLanguage,targetLanguage});
+              translator.sourceLanguage=sourceLanguage;
+              translator.targetLanguage=targetLanguage;
+            }
+          }
+          if(translator){
+            return {text:await translator.translate(text),provider:'chrome'};
+          }
+        }catch{
+          translator=null;
         }
-        return await translator.translate(text);
+      }
+      try{
+        const response=await fetch('/api/translate',{
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify({text,sourceLanguage,targetLanguage})
+        });
+        if(!response.ok)return null;
+        const translated=await response.json();
+        return translated.translated?{text:translated.text,provider:translated.provider}:null;
       }catch{
-        return '';
+        return null;
       }
     }
 

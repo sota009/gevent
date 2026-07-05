@@ -145,6 +145,38 @@ describe('gstack-deck-publish', () => {
     expect(providers.browser.available).toBe(true);
     expect(providers.manual.available).toBe(true);
   });
+
+  test('translates captions through the server fallback for mobile attendees', async () => {
+    const dir = await makeDeckPackage();
+    const port = randomPort();
+    const proc = Bun.spawn([BIN, dir, '--port', String(port), '--tunnel', 'none'], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        ...process.env,
+        GSTACK_TRANSLATE_PROVIDER: 'local',
+      },
+    });
+    processes.push(proc);
+    const base = `http://127.0.0.1:${port}`;
+    await waitForServer(`${base}/api/session`);
+
+    const response = await fetch(`${base}/api/translate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        text: 'The web needs an agent entrance',
+        sourceLanguage: 'en',
+        targetLanguage: 'ja',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const result = await response.json() as { text: string; translated: boolean; provider: string };
+    expect(result.translated).toBe(true);
+    expect(result.provider).toBe('local-fallback');
+    expect(result.text).toContain('エージェント用の入口');
+  });
 });
 
 async function makeDeckPackage(deckOverrides: Record<string, unknown> = {}): Promise<string> {

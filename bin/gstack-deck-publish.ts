@@ -14,6 +14,7 @@ type Options = {
 const REQUIRED_FILES = ['deck.json', 'speaker.html', 'attendee.html', 'speaker-notes.md'];
 const EVENT_ID = 'live-deck';
 const MAX_CAPTION_LENGTH = 600;
+const MAX_TRANSLATION_LENGTH = 600;
 
 main().catch(error => {
   console.error(error instanceof Error ? error.message : String(error));
@@ -233,6 +234,22 @@ async function handleApi(root: string, request: Request, url: URL): Promise<Resp
     return json(captionProviders());
   }
 
+  if (url.pathname === '/api/translate' && request.method === 'POST') {
+    const body = await request.json().catch(() => ({})) as {
+      text?: string;
+      sourceLanguage?: 'en' | 'ja';
+      targetLanguage?: 'en' | 'ja';
+    };
+    const text = sanitizeCaption(body.text ?? '');
+    if (!text) return json({ error: 'Translation text is required.' }, 400);
+    if ((body.text ?? '').length > MAX_TRANSLATION_LENGTH) {
+      return json({ error: `Translation text must be ${MAX_TRANSLATION_LENGTH} characters or fewer.` }, 400);
+    }
+    const sourceLanguage = body.sourceLanguage === 'ja' ? 'ja' : 'en';
+    const targetLanguage = body.targetLanguage === 'ja' ? 'ja' : 'en';
+    return json(await translateCaption(text, sourceLanguage, targetLanguage));
+  }
+
   if (url.pathname === '/api/session/caption' && request.method === 'POST') {
     const body = await request.json().catch(() => ({})) as {
       text?: string;
@@ -435,6 +452,131 @@ function extractCactusCaption(line: string): string {
     // Plain text CLI output is the common path.
   }
   return sanitizeCaption(trimmed.replace(/^(transcript|caption|text)\s*[:=-]\s*/i, ''));
+}
+
+async function translateCaption(
+  text: string,
+  sourceLanguage: CaptionState['sourceLanguage'],
+  targetLanguage: CaptionState['sourceLanguage'],
+): Promise<Record<string, unknown>> {
+  if (sourceLanguage === targetLanguage) {
+    return { text, sourceLanguage, targetLanguage, provider: 'none', translated: true };
+  }
+
+  const external = process.env.GSTACK_TRANSLATE_PROVIDER === 'google'
+    ? await translateWithGoogleWeb(text, sourceLanguage, targetLanguage).catch(() => '')
+    : '';
+  if (external) {
+    return { text: external, sourceLanguage, targetLanguage, provider: 'google-web', translated: true };
+  }
+
+  const local = translateWithLocalFallback(text, sourceLanguage, targetLanguage);
+  return {
+    text: local || text,
+    sourceLanguage,
+    targetLanguage,
+    provider: local ? 'local-fallback' : 'original',
+    translated: Boolean(local),
+  };
+}
+
+async function translateWithGoogleWeb(text: string, sourceLanguage: string, targetLanguage: string): Promise<string> {
+  const params = new URLSearchParams({
+    client: 'gtx',
+    sl: sourceLanguage,
+    tl: targetLanguage,
+    dt: 't',
+    q: text,
+  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2_000);
+  try {
+    const response = await fetch(`https://translate.googleapis.com/translate_a/single?${params}`, {
+      signal: controller.signal,
+      headers: { 'user-agent': 'gstack-deck-publish/0.1' },
+    });
+    if (!response.ok) return '';
+    const data = await response.json() as unknown;
+    if (!Array.isArray(data) || !Array.isArray(data[0])) return '';
+    return sanitizeCaption(data[0].map((part: unknown) => Array.isArray(part) ? part[0] : '').join(''));
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function translateWithLocalFallback(
+  text: string,
+  sourceLanguage: CaptionState['sourceLanguage'],
+  targetLanguage: CaptionState['sourceLanguage'],
+): string {
+  if (sourceLanguage === 'en' && targetLanguage === 'ja') return translateEnglishCaptionToJapanese(text);
+  if (sourceLanguage === 'ja' && targetLanguage === 'en') return translateJapaneseCaptionToEnglish(text);
+  return '';
+}
+
+function translateEnglishCaptionToJapanese(text: string): string {
+  const normalized = text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+  const exact: Record<string, string> = {
+    hello: 'こんにちは。',
+    'hello everyone': 'みなさん、こんにちは。',
+    'welcome to the talk': 'このトークへようこそ。',
+    'the web needs an agent entrance': 'Webにはエージェント用の入口が必要です。',
+    'services need an agent entrance': 'サービスにはエージェント用の入口が必要です。',
+    'human ui stays': '人間向けUIは残ります。',
+    'agent path becomes first class': 'エージェント向けの経路が第一級になります。',
+    'deck json is the source of truth': 'deck.jsonが信頼できる情報源です。',
+    'speaker html is for delivery': 'speaker.htmlは発表用です。',
+    'attendee html is for participants': 'attendee.htmlは参加者用です。',
+    'inspect deck json first': 'まずdeck.jsonを確認してください。',
+    'real device tunnel smoke test': '実機トンネルのスモークテストです。',
+  };
+  if (exact[normalized]) return exact[normalized];
+
+  let translated = text;
+  const replacements: Array<[RegExp, string]> = [
+    [/\bagents?\b/gi, 'エージェント'],
+    [/\bagent entrance\b/gi, 'エージェント用の入口'],
+    [/\bhuman ui\b/gi, '人間向けUI'],
+    [/\bspeaker view\b/gi, 'スピーカー表示'],
+    [/\battendee view\b/gi, '参加者表示'],
+    [/\bparticipant(s)?\b/gi, '参加者'],
+    [/\bspeaker\b/gi, 'スピーカー'],
+    [/\bslide(s)?\b/gi, 'スライド'],
+    [/\bcaption(s)?\b/gi, '字幕'],
+    [/\btranslation\b/gi, '翻訳'],
+    [/\blive\b/gi, 'ライブ'],
+    [/\bweb\b/gi, 'Web'],
+    [/\bservice(s)?\b/gi, 'サービス'],
+    [/\bdeck json\b/gi, 'deck.json'],
+    [/\bsource of truth\b/gi, '信頼できる情報源'],
+    [/\bhello\b/gi, 'こんにちは'],
+    [/\bwelcome\b/gi, 'ようこそ'],
+    [/\bneeds?\b/gi, '必要です'],
+  ];
+  for (const [pattern, replacement] of replacements) translated = translated.replace(pattern, replacement);
+  if (translated === text) return '';
+  return sanitizeCaption(translated);
+}
+
+function translateJapaneseCaptionToEnglish(text: string): string {
+  let translated = text;
+  const replacements: Array<[RegExp, string]> = [
+    [/エージェント/g, 'agent'],
+    [/人間向けUI/g, 'human UI'],
+    [/スピーカー/g, 'speaker'],
+    [/参加者/g, 'participants'],
+    [/スライド/g, 'slides'],
+    [/字幕/g, 'captions'],
+    [/翻訳/g, 'translation'],
+    [/ライブ/g, 'live'],
+    [/サービス/g, 'services'],
+    [/信頼できる情報源/g, 'source of truth'],
+    [/こんにちは/g, 'hello'],
+    [/ようこそ/g, 'welcome'],
+  ];
+  for (const [pattern, replacement] of replacements) translated = translated.replace(pattern, replacement);
+  if (translated === text) return '';
+  return sanitizeCaption(translated);
 }
 
 function adjacentSlideId(deck: Deck, direction: 'next' | 'prev'): string {

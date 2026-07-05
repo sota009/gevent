@@ -286,6 +286,6 @@ async function refreshSession(){
   }
 }
 events.onerror=()=>refreshSession();
-setInterval(refreshSession,1000);
+setInterval(refreshSession,300);
 fetch('/api/session',{cache:'no-store'}).then(r=>r.json()).then(next=>{state=next;render()});`;
 }
